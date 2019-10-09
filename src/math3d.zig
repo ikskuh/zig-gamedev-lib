@@ -1,5 +1,120 @@
 const std = @import("std");
 
+fn SwizzleTypeByElements(comptime i: usize) type {
+    return switch (i) {
+        1 => f32,
+        2 => Vec2,
+        3 => Vec3,
+        4 => Vec4,
+        else => @compileError("Swizzle can take up to 4 elements!"),
+    };
+}
+
+fn VectorMixin(comptime Self: type) type {
+    return struct {
+        pub fn add(a: Self, b: Self) Self {
+            var result: Self = undefined;
+            inline for (@typeInfo(Self).Struct.fields) |fld| {
+                @field(result, fld.name) = @field(a, fld.name) + @field(b, fld.name);
+            }
+            return result;
+        }
+
+        pub fn sub(a: Self, b: Self) Self {
+            var result: Self = undefined;
+            inline for (@typeInfo(Self).Struct.fields) |fld| {
+                @field(result, fld.name) = @field(a, fld.name) - @field(b, fld.name);
+            }
+            return result;
+        }
+
+        pub fn mul(a: Self, b: Self) Self {
+            var result: Self = undefined;
+            inline for (@typeInfo(Self).Struct.fields) |fld| {
+                @field(result, fld.name) = @field(a, fld.name) * @field(b, fld.name);
+            }
+            return result;
+        }
+
+        pub fn div(a: Self, b: Self) Self {
+            var result: Self = undefined;
+            inline for (@typeInfo(Self).Struct.fields) |fld| {
+                @field(result, fld.name) = @field(a, fld.name) / @field(b, fld.name);
+            }
+            return result;
+        }
+
+        pub fn scale(a: Self, b: f32) Self {
+            var result: Self = undefined;
+            inline for (@typeInfo(Self).Struct.fields) |fld| {
+                @field(result, fld.name) = @field(a, fld.name) * b;
+            }
+            return result;
+        }
+
+        pub fn dot(a: Self, b: Self) f32 {
+            var result: f32 = 0;
+            inline for (@typeInfo(Self).Struct.fields) |fld| {
+                result += @field(a, fld.name) * @field(b, fld.name);
+            }
+            return result;
+        }
+
+        pub fn length(a: Self) f32 {
+            return std.math.sqrt(a.length2());
+        }
+
+        pub fn length2(a: Self) f32 {
+            return Self.dot(a, a);
+        }
+
+        pub fn normalize(vec: Self) Self {
+            return vec.scale(1.0 / vec.length());
+        }
+
+        /// swizzle vector fields into a new vector type:
+        /// swizzle("xxx") will return a Vec3 with three times the x component.
+        pub fn swizzle(self: Self, comptime components: []const u8) SwizzleTypeByElements(components.len) {
+            const T = SwizzleTypeByElements(components.len);
+            var result: T = undefined;
+
+            if (components.len > 0) {
+                const fieldorder = "xyzw";
+                inline for (components) |c, i| {
+                    const temp = @field(self, components[i .. i + 1]);
+                    @field(result, switch (i) {
+                        0 => "x",
+                        1 => "y",
+                        2 => "z",
+                        3 => "w",
+                        else => @compileError("this should not happen"),
+                    }) = temp;
+                }
+            } else {
+                result = @field(self, components[i..i]);
+            }
+
+            return result;
+        }
+
+        pub fn componentMin(a: Self, b: Self) Self {
+            var result: Self = undefined;
+            inline for (@typeInfo(Self).Struct.fields) |fld| {
+                @field(result, fld.name) = std.math.min(@field(a, fld.name), @field(b, fld.name));
+            }
+            return result;
+        }
+
+        pub fn componentMax(a: Self, b: Self) Self {
+            var result: Self = undefined;
+            inline for (@typeInfo(Self).Struct.fields) |fld| {
+                @field(result, fld.name) = std.math.max(@field(a, fld.name), @field(b, fld.name));
+            }
+            return result;
+        }
+    };
+}
+
 pub const Vec2 = extern struct {
     const Self = @This();
 
@@ -10,6 +125,8 @@ pub const Vec2 = extern struct {
     pub const unitX = Self.new(1, 0);
     pub const unitY = Self.new(0, 1);
 
+    usingnamespace VectorMixin(Self);
+
     pub fn new(x: f32, y: f32) Self {
         return Self{
             .x = x,
@@ -19,53 +136,6 @@ pub const Vec2 = extern struct {
 
     pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@typeOf(context), []const u8) Errors!void) Errors!void {
         try std.fmt.format(context, Errors, output, "vec2({d:.2}, {d:.2})", value.x, value.y);
-    }
-
-    pub fn add(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x + b.x,
-            .y = a.y + b.y,
-        };
-    }
-
-    pub fn sub(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x - b.x,
-            .y = a.y - b.y,
-        };
-    }
-
-    pub fn mul(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x * b.x,
-            .y = a.y * b.y,
-        };
-    }
-
-    pub fn div(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x / b.x,
-            .y = a.y / b.y,
-        };
-    }
-
-    pub fn scale(a: Self, b: f32) Self {
-        return Self{
-            .x = a.x * b,
-            .y = a.y * b,
-        };
-    }
-
-    pub fn length(a: Self) f32 {
-        return std.math.sqrt(a.length2());
-    }
-
-    pub fn length2(a: Self) f32 {
-        return dot(a, a);
-    }
-
-    pub fn dot(a: Self, b: Self) f32 {
-        return a.x * b.x + a.y * b.y;
     }
 
     pub fn getField(vec: Self, comptime index: comptime_int) f32 {
@@ -84,35 +154,6 @@ pub const Vec2 = extern struct {
         }
         return result;
     }
-
-    pub fn normalize(vec: Self) Self {
-        return vec.scale(1.0 / vec.length());
-    }
-
-    /// swizzle vector fields into a new vector type:
-    /// swizzle("xxx") will return a Vec3 with three times the x component.
-    pub fn swizzle(self: Self, comptime components: []const u8) SwizzleTypeByElements(components.len) {
-        const T = SwizzleTypeByElements(components.len);
-        var result: T = undefined;
-
-        if (components.len > 0) {
-            const fieldorder = "xyzw";
-            inline for (components) |c, i| {
-                const temp = @field(self, components[i .. i + 1]);
-                @field(result, switch (i) {
-                    0 => "x",
-                    1 => "y",
-                    2 => "z",
-                    3 => "w",
-                    else => @compileError("this should not happen"),
-                }) = temp;
-            }
-        } else {
-            result = @field(self, components[i..i]);
-        }
-
-        return result;
-    }
 };
 
 pub const Vec3 = extern struct {
@@ -127,6 +168,8 @@ pub const Vec3 = extern struct {
     pub const unitY = Self.new(0, 1, 0);
     pub const unitZ = Self.new(0, 0, 1);
 
+    usingnamespace VectorMixin(Self);
+
     pub fn new(x: f32, y: f32, z: f32) Self {
         return Self{
             .x = x,
@@ -137,58 +180,6 @@ pub const Vec3 = extern struct {
 
     pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@typeOf(context), []const u8) Errors!void) Errors!void {
         try std.fmt.format(context, Errors, output, "vec3({d:.2}, {d:.2}, {d:.2})", value.x, value.y, value.z);
-    }
-
-    pub fn add(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x + b.x,
-            .y = a.y + b.y,
-            .z = a.z + b.z,
-        };
-    }
-
-    pub fn sub(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x - b.x,
-            .y = a.y - b.y,
-            .z = a.z - b.z,
-        };
-    }
-
-    pub fn mul(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x * b.x,
-            .y = a.y * b.y,
-            .z = a.z * b.z,
-        };
-    }
-
-    pub fn div(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x / b.x,
-            .y = a.y / b.y,
-            .z = a.z / b.z,
-        };
-    }
-
-    pub fn scale(a: Self, b: f32) Self {
-        return Self{
-            .x = a.x * b,
-            .y = a.y * b,
-            .z = a.z * b,
-        };
-    }
-
-    pub fn length(a: Self) f32 {
-        return std.math.sqrt(a.length2());
-    }
-
-    pub fn length2(a: Self) f32 {
-        return dot(a, a);
-    }
-
-    pub fn dot(a: Self, b: Self) f32 {
-        return a.x * b.x + a.y * b.y + a.z * b.z;
     }
 
     pub fn cross(a: Self, b: Self) Self {
@@ -259,43 +250,6 @@ pub const Vec3 = extern struct {
             else => @compileError("index out of bounds!"),
         }
     }
-
-    pub fn normalize(vec: Self) Self {
-        return vec.scale(1.0 / vec.length());
-    }
-
-    fn SwizzleTypeByElements(comptime i: usize) type {
-        return switch (i) {
-            1 => f32,
-            2 => Vec2,
-            3 => Vec3,
-            4 => Vec4,
-            else => @compileError("Swizzle can take up to 4 elements!"),
-        };
-    }
-
-    pub fn swizzle(self: Self, comptime components: []const u8) SwizzleTypeByElements(components.len) {
-        const T = SwizzleTypeByElements(components.len);
-        var result: T = undefined;
-
-        if (components.len > 0) {
-            const fieldorder = "xyzw";
-            inline for (components) |c, i| {
-                const temp = @field(self, components[i .. i + 1]);
-                @field(result, switch (i) {
-                    0 => "x",
-                    1 => "y",
-                    2 => "z",
-                    3 => "w",
-                    else => @compileError("this should not happen"),
-                }) = temp;
-            }
-        } else {
-            result = @field(self, components[i..i]);
-        }
-
-        return result;
-    }
 };
 
 pub const Vec4 = extern struct {
@@ -312,6 +266,8 @@ pub const Vec4 = extern struct {
     pub const unitZ = Self.new(0, 0, 1, 0);
     pub const unitW = Self.new(0, 0, 1, 0);
 
+    usingnamespace VectorMixin(Self);
+
     pub fn new(x: f32, y: f32, z: f32, w: f32) Self {
         return Self{
             .x = x,
@@ -323,63 +279,6 @@ pub const Vec4 = extern struct {
 
     pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@typeOf(context), []const u8) Errors!void) Errors!void {
         try std.fmt.format(context, Errors, output, "vec4({d:.2}, {d:.2}, {d:.2}, {d:.2})", value.x, value.y, value.z, value.w);
-    }
-
-    pub fn add(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x + b.x,
-            .y = a.y + b.y,
-            .z = a.z + b.z,
-            .w = a.w + b.w,
-        };
-    }
-
-    pub fn sub(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x - b.x,
-            .y = a.y - b.y,
-            .z = a.z - b.z,
-            .w = a.w - b.w,
-        };
-    }
-
-    pub fn mul(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x * b.x,
-            .y = a.y * b.y,
-            .z = a.z * b.z,
-            .w = a.w * b.w,
-        };
-    }
-
-    pub fn div(a: Self, b: Self) Self {
-        return Self{
-            .x = a.x / b.x,
-            .y = a.y / b.y,
-            .z = a.z / b.z,
-            .w = a.w / b.w,
-        };
-    }
-
-    pub fn scale(a: Self, b: f32) Self {
-        return Self{
-            .x = a.x * b,
-            .y = a.y * b,
-            .z = a.z * b,
-            .w = a.w * b,
-        };
-    }
-
-    pub fn length(a: Self) f32 {
-        return std.math.sqrt(a.length2());
-    }
-
-    pub fn length2(a: Self) f32 {
-        return dot(a, a);
-    }
-
-    pub fn dot(a: Self, b: Self) f32 {
-        return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
     }
 
     pub fn transform(vec: Self, mat: Mat4) Self {
@@ -401,10 +300,6 @@ pub const Vec4 = extern struct {
             3 => return vec.w,
             else => @compileError("index out of bounds!"),
         }
-    }
-
-    pub fn normalize(vec: Self) Self {
-        return vec.scale(1.0 / vec.length());
     }
 };
 
@@ -557,26 +452,36 @@ pub const Mat4 = extern struct {
         };
     }
 
-    pub fn swizzle(self: Self, comptime components: []const u8) SwizzleTypeByElements(components.len) {
-        const T = SwizzleTypeByElements(components.len);
-        var result: T = undefined;
+    pub fn createTranslationXYZ(x: f32, y: f32, z: f32) Self {
+        return Self{
+            .fields = [4][4]f32{
+                [4]f32{ 1, 0, 0, 0 },
+                [4]f32{ 0, 1, 0, 0 },
+                [4]f32{ 0, 0, 1, 0 },
+                [4]f32{ x, y, z, 1 },
+            },
+        };
+    }
 
-        if (components.len > 0) {
-            const fieldorder = "xyzw";
-            inline for (components) |c, i| {
-                const temp = @field(self, components[i .. i + 1]);
-                @field(result, switch (i) {
-                    0 => "x",
-                    1 => "y",
-                    2 => "z",
-                    3 => "w",
-                    else => @compileError("this should not happen"),
-                }) = temp;
-            }
-        } else {
-            result = @field(self, components[i..i]);
-        }
+    pub fn createTranslation(v: Vec3) Self {
+        return Self{
+            .fields = [4][4]f32{
+                [4]f32{ 1, 0, 0, 0 },
+                [4]f32{ 0, 1, 0, 0 },
+                [4]f32{ 0, 0, 1, 0 },
+                [4]f32{ v.x, v.y, v.z, 1 },
+            },
+        };
+    }
 
+    pub fn createOrthogonal(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) Self {
+        var result = Self.identity;
+        result.fields[0][0] = 2 / (right - left);
+        result.fields[1][1] = 2 / (top - bottom);
+        result.fields[2][2] = 1 / (far - near);
+        result.fields[3][0] = -(right + left) / (right - left);
+        result.fields[3][1] = -(top + bottom) / (top - bottom);
+        result.fields[3][2] = -near / (far - near);
         return result;
     }
 };
