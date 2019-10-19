@@ -1,5 +1,9 @@
 const std = @import("std");
 
+comptime {
+    @import("std").meta.refAllDecls(@This());
+}
+
 fn SwizzleTypeByElements(comptime i: usize) type {
     return switch (i) {
         1 => f32,
@@ -12,6 +16,7 @@ fn SwizzleTypeByElements(comptime i: usize) type {
 
 fn VectorMixin(comptime Self: type) type {
     return struct {
+        /// adds all components from `a` with the components of `b`.
         pub fn add(a: Self, b: Self) Self {
             var result: Self = undefined;
             inline for (@typeInfo(Self).Struct.fields) |fld| {
@@ -20,6 +25,7 @@ fn VectorMixin(comptime Self: type) type {
             return result;
         }
 
+        /// subtracts all components from `a` with the components of `b`.
         pub fn sub(a: Self, b: Self) Self {
             var result: Self = undefined;
             inline for (@typeInfo(Self).Struct.fields) |fld| {
@@ -28,6 +34,7 @@ fn VectorMixin(comptime Self: type) type {
             return result;
         }
 
+        /// multiplies all components from `a` with the components of `b`.
         pub fn mul(a: Self, b: Self) Self {
             var result: Self = undefined;
             inline for (@typeInfo(Self).Struct.fields) |fld| {
@@ -36,6 +43,7 @@ fn VectorMixin(comptime Self: type) type {
             return result;
         }
 
+        /// divides all components from `a` by the components of `b`.
         pub fn div(a: Self, b: Self) Self {
             var result: Self = undefined;
             inline for (@typeInfo(Self).Struct.fields) |fld| {
@@ -44,6 +52,7 @@ fn VectorMixin(comptime Self: type) type {
             return result;
         }
 
+        /// multiplies all components by a scalar value.
         pub fn scale(a: Self, b: f32) Self {
             var result: Self = undefined;
             inline for (@typeInfo(Self).Struct.fields) |fld| {
@@ -52,6 +61,8 @@ fn VectorMixin(comptime Self: type) type {
             return result;
         }
 
+        /// returns the dot product of two vectors.
+        /// This is the sum of products of all components.
         pub fn dot(a: Self, b: Self) f32 {
             var result: f32 = 0;
             inline for (@typeInfo(Self).Struct.fields) |fld| {
@@ -60,28 +71,49 @@ fn VectorMixin(comptime Self: type) type {
             return result;
         }
 
+        /// returns the magnitude of the vector.
         pub fn length(a: Self) f32 {
             return std.math.sqrt(a.length2());
         }
 
+        /// returns the squared magnitude of the vector.
         pub fn length2(a: Self) f32 {
             return Self.dot(a, a);
         }
 
+        /// returns either a normalized vector (`length() = 1`) or `zero` if the vector
+        /// has length 0.
         pub fn normalize(vec: Self) Self {
-            return vec.scale(1.0 / vec.length());
+            var len = vec.length();
+            return if (len != 0.0)
+                vec.scale(1.0 / vec.length())
+            else
+                Self.zero;
         }
 
-        /// swizzle vector fields into a new vector type:
+        /// swizzle vector fields into a new vector type.
         /// swizzle("xxx") will return a Vec3 with three times the x component.
+        /// swizzle will return a vector or scalar type with the same number of components as the
+        /// `components` string.
+        /// `components` may be any sequence of `x`, `y`, `z`, `w`, `0` and `1`.
+        /// The letters will be replaced by the corresponding component, the digits will be replaced
+        /// by the corresponding literal value.
+        ///
+        /// Examples:
+        /// - `vec4(1,2,3,4).swizzle("wzyx") == vec4(4, 3, 2, 1)`
+        /// - `vec4(1,2,3,4).swizzle("xyx") == vec3(1,2,1)`
+        /// - `vec2(1,2).swizzle("xyxy") == vec4(1,2,1,2)`
+        /// - `vec2(3,4).swizzle("xy01") == vec4(3, 4, 0, 1)`
+        ///
         pub fn swizzle(self: Self, comptime components: []const u8) SwizzleTypeByElements(components.len) {
             const T = SwizzleTypeByElements(components.len);
             var result: T = undefined;
 
-            if (components.len > 0) {
+            if (components.len > 1) {
                 const fieldorder = "xyzw";
                 inline for (components) |c, i| {
-                    const temp = @field(self, components[i .. i + 1]);
+                    const slice = components[i .. i + 1];
+                    const temp = if (std.mem.eql(u8, slice, "0")) 0 else if (std.mem.eql(u8, slice, "1")) 1 else @field(self);
                     @field(result, switch (i) {
                         0 => "x",
                         1 => "y",
@@ -90,13 +122,16 @@ fn VectorMixin(comptime Self: type) type {
                         else => @compileError("this should not happen"),
                     }) = temp;
                 }
+            } else if (components.len == 1) {
+                result = @field(self, components);
             } else {
-                result = @field(self, components[i..i]);
+                @compileError("components must at least contain a single field!");
             }
 
             return result;
         }
 
+        /// returns a new vector where each component is the minimum of the components of the input vectors.
         pub fn componentMin(a: Self, b: Self) Self {
             var result: Self = undefined;
             inline for (@typeInfo(Self).Struct.fields) |fld| {
@@ -105,6 +140,7 @@ fn VectorMixin(comptime Self: type) type {
             return result;
         }
 
+        /// returns a new vector where each component is the maximum of the components of the input vectors.
         pub fn componentMax(a: Self, b: Self) Self {
             var result: Self = undefined;
             inline for (@typeInfo(Self).Struct.fields) |fld| {
@@ -115,6 +151,7 @@ fn VectorMixin(comptime Self: type) type {
     };
 }
 
+/// 2-dimensional vector type.
 pub const Vec2 = extern struct {
     const Self = @This();
 
@@ -138,7 +175,7 @@ pub const Vec2 = extern struct {
         try std.fmt.format(context, Errors, output, "vec2({d:.2}, {d:.2})", value.x, value.y);
     }
 
-    pub fn getField(vec: Self, comptime index: comptime_int) f32 {
+    fn getField(vec: Self, comptime index: comptime_int) f32 {
         switch (index) {
             0 => return vec.x,
             1 => return vec.y,
@@ -146,6 +183,7 @@ pub const Vec2 = extern struct {
         }
     }
 
+    /// multiplies the vector with a matrix.
     pub fn transform(vec: Self, mat: Mat2) Self {
         var result = zero;
         inline for ([_]comptime_int{ 0, 1 }) |i| {
@@ -156,6 +194,7 @@ pub const Vec2 = extern struct {
     }
 };
 
+/// 3-dimensional vector type.
 pub const Vec3 = extern struct {
     const Self = @This();
 
@@ -182,6 +221,7 @@ pub const Vec3 = extern struct {
         try std.fmt.format(context, Errors, output, "vec3({d:.2}, {d:.2}, {d:.2})", value.x, value.y, value.z);
     }
 
+    /// calculates the cross product. result will be perpendicular to a and b.
     pub fn cross(a: Self, b: Self) Self {
         return Self{
             .x = a.y * b.z - a.z * b.y,
@@ -190,6 +230,7 @@ pub const Vec3 = extern struct {
         };
     }
 
+    /// converts the vector from an homogeneous position (w=1).
     pub fn toAffinePosition(a: Self) Vec4 {
         return Vec4{
             .x = a.x,
@@ -199,6 +240,7 @@ pub const Vec3 = extern struct {
         };
     }
 
+    /// converts the vector from an homogeneous direction (w=0).
     pub fn toAffineDirection(a: Self) Vec4 {
         return Vec4{
             .x = a.x,
@@ -224,6 +266,7 @@ pub const Vec3 = extern struct {
         };
     }
 
+    /// multiplies the vector with a matrix.
     pub fn transform(vec: Self, mat: Mat3) Self {
         var result = zero;
         inline for ([_]comptime_int{ 0, 1, 2 }) |i| {
@@ -234,15 +277,17 @@ pub const Vec3 = extern struct {
         return result;
     }
 
+    /// transforms a homogeneous position.
     pub fn transformPosition(vec: Self, mat: Mat4) Self {
         return fromAffinePosition(vec.toAffinePosition().transform(mat));
     }
 
+    /// transforms a homogeneous direction.
     pub fn transformDirection(vec: Self, mat: Mat4) Self {
         return fromAffineDirection(vec.toAffineDirection().transform(mat));
     }
 
-    pub fn getField(vec: Self, comptime index: comptime_int) f32 {
+    fn getField(vec: Self, comptime index: comptime_int) f32 {
         switch (index) {
             0 => return vec.x,
             1 => return vec.y,
@@ -252,6 +297,7 @@ pub const Vec3 = extern struct {
     }
 };
 
+/// 4-dimensional vector type.
 pub const Vec4 = extern struct {
     const Self = @This();
 
@@ -281,6 +327,7 @@ pub const Vec4 = extern struct {
         try std.fmt.format(context, Errors, output, "vec4({d:.2}, {d:.2}, {d:.2}, {d:.2})", value.x, value.y, value.z, value.w);
     }
 
+    /// multiplies the vector with a matrix.
     pub fn transform(vec: Self, mat: Mat4) Self {
         var result = zero;
         inline for ([_]comptime_int{ 0, 1, 2, 3 }) |i| {
@@ -292,7 +339,7 @@ pub const Vec4 = extern struct {
         return result;
     }
 
-    pub fn getField(vec: Self, comptime index: comptime_int) f32 {
+    fn getField(vec: Self, comptime index: comptime_int) f32 {
         switch (index) {
             0 => return vec.x,
             1 => return vec.y,
@@ -303,9 +350,11 @@ pub const Vec4 = extern struct {
     }
 };
 
+/// 2 by 2 matrix type.
 pub const Mat2 = extern struct {
     fields: [2][2]f32, // [row][col]
 
+    /// identitiy matrix
     pub const identity = Self{
         .fields = [2]f32{
             [2]f32{ 1, 0 },
@@ -314,9 +363,11 @@ pub const Mat2 = extern struct {
     };
 };
 
+/// 3 by 3 matrix type.
 pub const Mat3 = extern struct {
     fields: [3][3]f32, // [row][col]
 
+    /// identitiy matrix
     pub const identity = Self{
         .fields = [3]f32{
             [3]f32{ 1, 0, 0 },
@@ -326,10 +377,12 @@ pub const Mat3 = extern struct {
     };
 };
 
+/// 4 by 4 matrix type.
 pub const Mat4 = extern struct {
     pub const Self = @This();
     fields: [4][4]f32, // [row][col]
 
+    /// zero matrix.
     pub const zero = Self{
         .fields = [4][4]f32{
             [4]f32{ 0, 0, 0, 0 },
@@ -339,6 +392,7 @@ pub const Mat4 = extern struct {
         },
     };
 
+    /// identitiy matrix
     pub const identity = Self{
         .fields = [4][4]f32{
             [4]f32{ 1, 0, 0, 0 },
@@ -359,6 +413,7 @@ pub const Mat4 = extern struct {
         try output(context, " }");
     }
 
+    /// performs matrix multiplication of a*b
     pub fn mul(a: Self, b: Self) Self {
         var result: Self = undefined;
         inline for ([_]comptime_int{ 0, 1, 2, 3 }) |row| {
@@ -373,6 +428,8 @@ pub const Mat4 = extern struct {
         return result;
     }
 
+    /// transposes the matrix.
+    /// this will swap columns with rows.
     pub fn transpose(a: Self) Self {
         var result: Self = undefined;
         inline for ([_]comptime_int{ 0, 1, 2, 3 }) |row| {
@@ -384,6 +441,12 @@ pub const Mat4 = extern struct {
     }
 
     // taken from GLM implementation
+
+    /// Creates a look-at matrix.
+    /// The matrix will create a transformation that can be used
+    /// as a camera transform.
+    /// the camera is located at `eye` and will look into `direction`.
+    /// `up` is the direction from the screen center to the upper screen border.
     pub fn createLook(eye: Vec3, direction: Vec3, up: Vec3) Self {
         const f = direction.normalize();
         const s = Vec3.cross(up, f).normalize();
@@ -405,11 +468,21 @@ pub const Mat4 = extern struct {
         return result;
     }
 
+    /// Creates a look-at matrix.
+    /// The matrix will create a transformation that can be used
+    /// as a camera transform.
+    /// the camera is located at `eye` and will look at `center`.
+    /// `up` is the direction from the screen center to the upper screen border.
     pub fn createLookAt(eye: Vec3, center: Vec3, up: Vec3) Self {
         return createLook(eye, Vec3.sub(center, eye), up);
     }
 
     // taken from GLM implementation
+
+    /// creates a perspective transformation matrix.
+    /// `fov` is the field of view in radians,
+    /// `aspect` is the screen aspect ratio (width / height)
+    /// `near` is the distance of the near clip plane, whereas `far` is the distance to the far clip plane.
     pub fn createPerspective(fov: f32, aspect: f32, near: f32, far: f32) Self {
         std.debug.assert(std.math.fabs(aspect - 0.001) > 0);
 
@@ -424,6 +497,7 @@ pub const Mat4 = extern struct {
         return result;
     }
 
+    /// creates a rotation matrix around a certain axis.
     pub fn createAngleAxis(axis: Vec3, angle: f32) Self {
         var cos = std.math.cos(angle);
         var sin = std.math.sin(angle);
@@ -441,6 +515,7 @@ pub const Mat4 = extern struct {
         };
     }
 
+    /// creates matrix that will scale a homogeneous matrix.
     pub fn createScale(scale: f32) Self {
         return Self{
             .fields = [4][4]f32{
@@ -452,6 +527,7 @@ pub const Mat4 = extern struct {
         };
     }
 
+    /// creates matrix that will translate a homogeneous matrix.
     pub fn createTranslationXYZ(x: f32, y: f32, z: f32) Self {
         return Self{
             .fields = [4][4]f32{
@@ -463,6 +539,7 @@ pub const Mat4 = extern struct {
         };
     }
 
+    /// creates matrix that will scale a homogeneous matrix.
     pub fn createTranslation(v: Vec3) Self {
         return Self{
             .fields = [4][4]f32{
@@ -474,6 +551,9 @@ pub const Mat4 = extern struct {
         };
     }
 
+    /// creates an orthogonal projection matrix.
+    /// `left`, `right`, `bottom` and `top` are the borders of the screen whereas `near` and `far` define the
+    /// distance of the near and far clipping planes.
     pub fn createOrthogonal(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) Self {
         var result = Self.identity;
         result.fields[0][0] = 2 / (right - left);
@@ -486,14 +566,17 @@ pub const Mat4 = extern struct {
     }
 };
 
+/// constructs a new Vec2.
 pub fn vec2(x: f32, y: f32) Vec2 {
     return Vec2.new(x, y);
 }
 
+/// constructs a new Vec3.
 pub fn vec3(x: f32, y: f32, z: f32) Vec3 {
     return Vec3.new(x, y, z);
 }
 
+/// constructs a new Vec4.
 pub fn vec4(x: f32, y: f32, z: f32, w: f32) Vec4 {
     return Vec4.new(x, y, z, w);
 }
@@ -666,7 +749,7 @@ test "mat4 arithmetics" {
 
     assert(std.meta.eql(Mat4.transpose(mat), mat_transposed));
 }
-    // zig fmt: on
+// zig fmt: on
 
 test "vec4 transform" {
     const id = Mat4.identity;

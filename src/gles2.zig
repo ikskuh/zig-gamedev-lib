@@ -16,6 +16,10 @@
 //     …
 // }
 
+comptime {
+    @import("std").meta.refAllDecls(@This());
+}
+
 pub const LoaderFunction = extern fn ([*c]const u8) ?*c_void;
 
 pub export fn load_gles2(gles2_get_proc_address: LoaderFunction) void {

@@ -1,6 +1,10 @@
 const std = @import("std");
 usingnamespace @import("math3d.zig");
 
+comptime {
+    @import("std").meta.refAllDecls(@This());
+}
+
 // this file parses OBJ wavefront according to
 // http://paulbourke.net/dataformats/obj/
 // with a lot of restrictions

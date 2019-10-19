@@ -1,22 +1,34 @@
 const std = @import("std");
 
+comptime {
+    @import("std").meta.refAllDecls(@This());
+}
+
 // this file implements the Portable Anymap specification provided by
 // http://netpbm.sourceforge.net/doc/pbm.html // P1, P4 => Bitmap
 // http://netpbm.sourceforge.net/doc/pgm.html // P2, P5 => Graymap
 // http://netpbm.sourceforge.net/doc/ppm.html // P3, P6 => Pixmap
 
+/// one of the three types a netbpm graphic could be stored in.
 pub const Format = enum {
+    /// the image contains black-and-white pixels.
     bitmap,
+
+    /// the image contains grayscale pixels.
     grayscale,
+
+    /// the image contains RGB pixels.
     rgb,
 };
 
+/// RGB pixel value.
 pub const Color = extern struct {
     pub r: u8,
     pub g: u8,
     pub b: u8,
 };
 
+/// Generic image datatype that contains pixels of type `T`.
 pub fn AnymapData(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -24,19 +36,25 @@ pub fn AnymapData(comptime T: type) type {
         allocator: *std.mem.Allocator,
         pixels: []T,
 
+        /// width of the image in pixels.
         pub width: usize,
+
+        /// height of the image in pixels.
         pub height: usize,
 
+        /// releases the memory held by this instance.
         pub fn deinit(self: Self) void {
             self.allocator.free(self.pixels);
         }
 
+        /// tries to get a pixel from the image.
         pub fn get(self: Self, x: usize, y: usize) !T {
             if (x >= self.width or y >= self.height)
                 return error.OutOfBounds;
             return self.pixels[y * self.width + x];
         }
 
+        /// tries to set a pixel in the image.
         pub fn set(self: *Self, x: usize, y: usize, value: T) !void {
             if (x >= self.width or y >= self.height)
                 return error.OutOfBounds;
@@ -45,12 +63,14 @@ pub fn AnymapData(comptime T: type) type {
     };
 }
 
+/// A decoded anymap. Contains either a black-and-white, grayscale or RGB image.
 pub const Anymap = union(Format) {
     const Self = @This();
     bitmap: AnymapData(u1),
     grayscale: AnymapData(u8),
     rgb: AnymapData(Color),
 
+    /// releases the data held by the contents of this image.
     pub fn deinit(self: Self) void {
         switch (self) {
             .bitmap => |bmp| bmp.deinit(),
@@ -59,6 +79,7 @@ pub const Anymap = union(Format) {
         }
     }
 
+    /// returns the width of the contained image.
     pub fn getWidth(self: Self) usize {
         return switch (self) {
             .bitmap => |a| a.width,
@@ -67,6 +88,7 @@ pub const Anymap = union(Format) {
         };
     }
 
+    /// returns the height of the contained image.
     pub fn getHeight(self: Self) usize {
         return switch (self) {
             .bitmap => |a| a.height,
@@ -284,6 +306,8 @@ fn loadAsciiRgbmap(data: *AnymapData(Color), stream: *std.io.InStream(std.fs.Fil
     }
 }
 
+/// Loads a netbpm image from the given file path.
+/// Allocates required memory by the given allocator.
 pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Anymap {
     var file = try std.fs.File.openRead(path);
     defer file.close();
