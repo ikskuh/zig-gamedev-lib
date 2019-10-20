@@ -474,7 +474,7 @@ pub const Mat4 = extern struct {
     /// the camera is located at `eye` and will look at `center`.
     /// `up` is the direction from the screen center to the upper screen border.
     pub fn createLookAt(eye: Vec3, center: Vec3, up: Vec3) Self {
-        return createLook(eye, Vec3.sub(center, eye), up);
+        return createLook(eye, Vec3.sub(eye, center), up);
     }
 
     // taken from GLM implementation
@@ -485,15 +485,15 @@ pub const Mat4 = extern struct {
     /// `near` is the distance of the near clip plane, whereas `far` is the distance to the far clip plane.
     pub fn createPerspective(fov: f32, aspect: f32, near: f32, far: f32) Self {
         std.debug.assert(std.math.fabs(aspect - 0.001) > 0);
-
+        std.debug.assert(far > near);
         const tanHalfFovy = std.math.tan(fov / 2);
 
         var result = Self.zero;
         result.fields[0][0] = 1.0 / (aspect * tanHalfFovy);
         result.fields[1][1] = 1.0 / (tanHalfFovy);
-        result.fields[2][2] = far / (far - near);
-        result.fields[2][3] = 1;
-        result.fields[3][2] = -(far * near) / (far - near);
+        result.fields[2][2] = -(far + near) / (far - near);
+        result.fields[2][3] = -1.0;
+        result.fields[3][2] = -(2.0 * far * near) / (far - near);
         return result;
     }
 
