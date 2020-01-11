@@ -1,11 +1,12 @@
 /// provides linear algebra with focus on game dev.
 pub const math3d = @import("math3d.zig");
 
-
 /// provides a NetBMP loader
 pub const netbpm = @import("netbpm.zig");
 
-/// this works around bugs in the zig compiler
+/// provides a PCX loader
+pub const pcx = @import("pcx.zig");
+
 pub usingnamespace if (@import("builtin").is_test)
     struct {}
 else
