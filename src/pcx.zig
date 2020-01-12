@@ -37,15 +37,23 @@ fn SubImage(comptime Pixel: type) type {
     return struct {
         const Self = @This();
 
+        const PaletteType = switch (Pixel) {
+            u1 => [2]RGB,
+            u4 => [16]RGB,
+            u8 => [256]RGB,
+            RGB => void,
+            else => @compileError(@typeName(Pixel) ++ " not supported yet!"),
+        };
+
         allocator: *std.mem.Allocator,
         pixels: []Pixel,
         width: usize,
         height: usize,
-        palette: ?*[256]RGB,
+        palette: ?*PaletteType,
 
         pub fn initLinear(allocator: *std.mem.Allocator, header: Header, file: *std.fs.File, stream: *std.fs.File.InStream.Stream) !Self {
-            const width = @as(usize, header.xmax - header.xmin);
-            const height = @as(usize, header.ymax - header.ymin);
+            const width = @as(usize, header.xmax - header.xmin + 1);
+            const height = @as(usize, header.ymax - header.ymin + 1);
 
             var img = Self{
                 .allocator = allocator,
@@ -68,7 +76,14 @@ fn SubImage(comptime Pixel: type) type {
                     const byte = try decoder.readByte();
                     switch (Pixel) {
                         u1 => {},
-                        u4 => {},
+                        u4 => {
+                            img.pixels[y * img.width + x + 0] = @truncate(u4, byte);
+                            x += 1;
+                            if (x < img.width) {
+                                img.pixels[y * img.width + x + 1] = @truncate(u4, byte >> 4);
+                                x += 1;
+                            }
+                        },
                         u8 => {
                             img.pixels[y * img.width + x] = byte;
                             x += 1;
@@ -87,18 +102,27 @@ fn SubImage(comptime Pixel: type) type {
             try decoder.finish();
 
             if (Pixel != RGB) {
-                try file.seekFromEnd(-769);
-
-                if ((try stream.readByte()) != 0x0C)
-                    return error.MissingPalette;
-
-                var pal = try allocator.create([256]RGB);
+                var pal = try allocator.create(PaletteType);
                 errdefer allocator.destroy(pal);
 
-                for (pal) |*c| {
-                    c.r = try stream.readByte();
-                    c.g = try stream.readByte();
-                    c.b = try stream.readByte();
+                var i: usize = 0;
+                while (i < std.math.min(pal.len, header.builtinPalette.len / 3)) : (i += 1) {
+                    pal[i].r = header.builtinPalette[3 * i + 0];
+                    pal[i].g = header.builtinPalette[3 * i + 1];
+                    pal[i].b = header.builtinPalette[3 * i + 2];
+                }
+
+                if (Pixel == u8) {
+                    try file.seekFromEnd(-769);
+
+                    if ((try stream.readByte()) != 0x0C)
+                        return error.MissingPalette;
+
+                    for (pal) |*c| {
+                        c.r = try stream.readByte();
+                        c.g = try stream.readByte();
+                        c.b = try stream.readByte();
+                    }
                 }
 
                 img.palette = pal;
@@ -152,8 +176,6 @@ pub fn load(allocator: *std.mem.Allocator, file: *std.fs.File) !Image {
 
     if (header.planes != 1)
         return error.UnsupportedFormat;
-
-    std.debug.warn("{}\n", .{header});
 
     var img: Image = undefined;
     switch (header.bpp) {
@@ -226,3 +248,59 @@ const RLEDecoder = struct {
             return error.RLEStreamIncomplete;
     }
 };
+
+test "PCX bpp1 (linear)" {
+    var file = try std.fs.cwd().openRead("test/test-bpp1.pcx");
+    defer file.close();
+
+    var img = try load(std.debug.global_allocator, &file);
+    errdefer img.deinit();
+
+    std.debug.assert(img == .bpp1);
+    std.debug.assert(img.bpp1.width == 27);
+    std.debug.assert(img.bpp1.height == 27);
+    std.debug.assert(img.bpp1.palette != null);
+    std.debug.assert(img.bpp1.palette.?.len == 2);
+}
+
+test "PCX bpp4 (linear)" {
+    var file = try std.fs.cwd().openRead("test/test-bpp4.pcx");
+    defer file.close();
+
+    var img = try load(std.debug.global_allocator, &file);
+    errdefer img.deinit();
+
+    std.debug.assert(img == .bpp4);
+    std.debug.assert(img.bpp4.width == 27);
+    std.debug.assert(img.bpp4.height == 27);
+    std.debug.assert(img.bpp4.palette != null);
+    std.debug.assert(img.bpp4.palette.?.len == 16);
+}
+
+test "PCX bpp8 (linear)" {
+    var file = try std.fs.cwd().openRead("test/test-bpp8.pcx");
+    defer file.close();
+
+    var img = try load(std.debug.global_allocator, &file);
+    errdefer img.deinit();
+
+    std.debug.assert(img == .bpp8);
+    std.debug.assert(img.bpp8.width == 27);
+    std.debug.assert(img.bpp8.height == 27);
+    std.debug.assert(img.bpp8.palette != null);
+    std.debug.assert(img.bpp8.palette.?.len == 256);
+}
+
+// TODO: reimplement as soon as planar mode is implemented
+// test "PCX bpp24 (planar)" {
+//     var file = try std.fs.cwd().openRead("test/test-bpp24.pcx");
+//     defer file.close();
+
+//     var img = try load(std.debug.global_allocator, &file);
+//     errdefer img.deinit();
+
+//     std.debug.assert(img == .bpp24);
+//     std.debug.assert(img.bpp24.width == 27);
+//     std.debug.assert(img.bpp24.height == 27);
+//     std.debug.assert(img.bpp24.palette == null);
+// }

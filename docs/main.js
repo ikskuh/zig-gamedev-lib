@@ -20,7 +20,9 @@
     var domListValues = document.getElementById("listValues");
     var domFnProto = document.getElementById("fnProto");
     var domFnProtoCode = document.getElementById("fnProtoCode");
-    var domFnDocs = document.getElementById("fnDocs");
+    var domSectParams = document.getElementById("sectParams");
+    var domListParams = document.getElementById("listParams");
+    var domTldDocs = document.getElementById("tldDocs");
     var domSectFnErrors = document.getElementById("sectFnErrors");
     var domListFnErrors = document.getElementById("listFnErrors");
     var domTableFnErrors = document.getElementById("tableFnErrors");
@@ -34,7 +36,6 @@
     var domListSearchResults = document.getElementById("listSearchResults");
     var domSectSearchNoResults = document.getElementById("sectSearchNoResults");
     var domSectInfo = document.getElementById("sectInfo");
-    var domListInfo = document.getElementById("listInfo");
     var domTdTarget = document.getElementById("tdTarget");
     var domTdZigVer = document.getElementById("tdZigVer");
     var domHdrName = document.getElementById("hdrName");
@@ -102,7 +103,8 @@
     function render() {
         domStatus.classList.add("hidden");
         domFnProto.classList.add("hidden");
-        domFnDocs.classList.add("hidden");
+        domSectParams.classList.add("hidden");
+        domTldDocs.classList.add("hidden");
         domSectPkgs.classList.add("hidden");
         domSectTypes.classList.add("hidden");
         domSectNamespaces.classList.add("hidden");
@@ -190,11 +192,11 @@
 
         var docs = zigAnalysis.astNodes[decl.src].docs;
         if (docs != null) {
-            domFnDocs.innerHTML = markdown(docs);
+            domTldDocs.innerHTML = markdown(docs);
         } else {
-            domFnDocs.innerHTML = '<p>There are no doc comments for this declaration.</p>';
+            domTldDocs.innerHTML = '<p>There are no doc comments for this declaration.</p>';
         }
-        domFnDocs.classList.remove("hidden");
+        domTldDocs.classList.remove("hidden");
     }
 
     function typeIsErrSet(typeIndex) {
@@ -227,6 +229,8 @@
         }
 
         var typeObj = zigAnalysis.types[fnDecl.type];
+        renderFnParamDocs(fnDecl, typeObj);
+
         var errSetTypeIndex = null;
         if (typeObj.ret != null) {
             var retType = zigAnalysis.types[typeObj.ret];
@@ -274,10 +278,62 @@
             docsSource = protoSrcNode.docs;
         }
         if (docsSource != null) {
-            domFnDocs.innerHTML = markdown(docsSource);
-            domFnDocs.classList.remove("hidden");
+            domTldDocs.innerHTML = markdown(docsSource);
+            domTldDocs.classList.remove("hidden");
         }
         domFnProto.classList.remove("hidden");
+    }
+
+    function renderFnParamDocs(fnDecl, typeObj) {
+        var docCount = 0;
+
+        var fnObj = zigAnalysis.fns[fnDecl.value];
+        var fnNode = zigAnalysis.astNodes[fnObj.src];
+        var fields = fnNode.fields;
+        var isVarArgs = fnNode.varArgs;
+
+        for (var i = 0; i < fields.length; i += 1) {
+            var field = fields[i];
+            var fieldNode = zigAnalysis.astNodes[field];
+            if (fieldNode.docs != null) {
+                docCount += 1;
+            }
+        }
+        if (docCount == 0) {
+            return;
+        }
+
+        resizeDomList(domListParams, docCount, '<div></div>');
+        var domIndex = 0;
+
+        for (var i = 0; i < fields.length; i += 1) {
+            var field = fields[i];
+            var fieldNode = zigAnalysis.astNodes[field];
+            if (fieldNode.docs == null) {
+                continue;
+            }
+            var divDom = domListParams.children[domIndex];
+            domIndex += 1;
+            var argTypeIndex = typeObj.args[i];
+
+            var html = '<pre>' + escapeHtml(fieldNode.name) + ": ";
+            if (isVarArgs && i === typeObj.args.length - 1) {
+                html += '...';
+            } else if (argTypeIndex != null) {
+                html += typeIndexName(argTypeIndex, true, true);
+            } else {
+                html += '<span class="tok-kw">var</span>';
+            }
+
+            html += ',</pre>';
+
+            var docs = fieldNode.docs;
+            if (docs != null) {
+                html += markdown(docs);
+            }
+            divDom.innerHTML = html;
+        }
+        domSectParams.classList.remove("hidden");
     }
 
     function renderNav() {
@@ -487,7 +543,7 @@
                     return value + "";
                 }
             default:
-                throw new Error("TODO implement getValueText for this type");
+                console.trace("TODO implement getValueText for this type:", zigAnalysis.typeKinds[typeObj.kind]);
         }
     }
 
@@ -893,8 +949,8 @@
 
         var docs = zigAnalysis.astNodes[decl.src].docs;
         if (docs != null) {
-            domFnDocs.innerHTML = markdown(docs);
-            domFnDocs.classList.remove("hidden");
+            domTldDocs.innerHTML = markdown(docs);
+            domTldDocs.classList.remove("hidden");
         }
 
         domFnProto.classList.remove("hidden");
@@ -906,8 +962,8 @@
 
         var docs = zigAnalysis.astNodes[decl.src].docs;
         if (docs != null) {
-            domFnDocs.innerHTML = markdown(docs);
-            domFnDocs.classList.remove("hidden");
+            domTldDocs.innerHTML = markdown(docs);
+            domTldDocs.classList.remove("hidden");
         }
 
         domFnProto.classList.remove("hidden");
@@ -956,6 +1012,14 @@
         fnsList.sort(byNameProperty);
         varsList.sort(byNameProperty);
         valsList.sort(byNameProperty);
+
+        if (container.src != null) {
+            var docs = zigAnalysis.astNodes[container.src].docs;
+            if (docs != null) {
+                domTldDocs.innerHTML = markdown(docs);
+                domTldDocs.classList.remove("hidden");
+            }
+        }
 
         if (typesList.length !== 0) {
             resizeDomList(domListTypes, typesList.length, '<li><a href="#"></a></li>');
@@ -1130,7 +1194,7 @@
         // This is just for debugging purposes, not needed to function
         var assertList = ["Type","Void","Bool","NoReturn","Int","Float","Pointer","Array","Struct",
             "ComptimeFloat","ComptimeInt","Undefined","Null","Optional","ErrorUnion","ErrorSet","Enum",
-            "Union","Fn","BoundFn","ArgTuple","Opaque","Frame","AnyFrame","Vector","EnumLiteral"];
+            "Union","Fn","BoundFn","Opaque","Frame","AnyFrame","Vector","EnumLiteral"];
         for (var i = 0; i < assertList.length; i += 1) {
             if (map[assertList[i]] == null) throw new Error("No type kind '" + assertList[i] + "' found");
         }
@@ -1315,9 +1379,289 @@
         return markdown(firstLine);
     }
 
-    function markdown(mdText) {
-        // TODO implement more
-        return escapeHtml(mdText);
+    function markdown(input) {
+        const raw_lines = input.split('\n'); // zig allows no '\r', so we don't need to split on CR
+        const lines = [];
+
+        // PHASE 1:
+        // Dissect lines and determine the type for each line.
+        // Also computes indentation level and removes unnecessary whitespace
+
+        var is_reading_code = false;
+        var code_indent = 0;
+        for (var line_no = 0; line_no < raw_lines.length; line_no++) {
+            const raw_line = raw_lines[line_no];
+
+            const line = {
+                indent: 0,
+                raw_text: raw_line,
+                text: raw_line.trim(),
+                type: "p", // p, h1 … h6, code, ul, ol, blockquote, skip, empty
+            };
+
+            if (!is_reading_code) {
+                while ((line.indent < line.raw_text.length) && line.raw_text[line.indent] == ' ') {
+                    line.indent += 1;
+                }
+
+                if (line.text.startsWith("######")) {
+                    line.type = "h6";
+                    line.text = line.text.substr(6);
+                }
+                else if (line.text.startsWith("#####")) {
+                    line.type = "h5";
+                    line.text = line.text.substr(5);
+                }
+                else if (line.text.startsWith("####")) {
+                    line.type = "h4";
+                    line.text = line.text.substr(4);
+                }
+                else if (line.text.startsWith("###")) {
+                    line.type = "h3";
+                    line.text = line.text.substr(3);
+                }
+                else if (line.text.startsWith("##")) {
+                    line.type = "h2";
+                    line.text = line.text.substr(2);
+                }
+                else if (line.text.startsWith("#")) {
+                    line.type = "h1";
+                    line.text = line.text.substr(1);
+                }
+                else if (line.text.startsWith("-")) {
+                    line.type = "ul";
+                    line.text = line.text.substr(1);
+                }
+                else if (line.text.match(/^\d+\..*$/)) { // if line starts with {number}{dot}
+                    const match = line.text.match(/(\d+)\./);
+                    line.type = "ul";
+                    line.text = line.text.substr(match[0].length);
+                    line.ordered_number = Number(match[1].length);
+                }
+                else if (line.text == "```") {
+                    line.type = "skip";
+                    is_reading_code = true;
+                    code_indent = line.indent;
+                }
+                else if (line.text == "") {
+                    line.type = "empty";
+                }
+            }
+            else {
+                if (line.text == "```") {
+                    is_reading_code = false;
+                    line.type = "skip";
+                } else {
+                    line.type = "code";
+                    line.text = line.raw_text.substr(code_indent); // remove the indent of the ``` from all the code block
+                }
+            }
+
+            if (line.type != "skip") {
+                lines.push(line);
+            }
+        }
+
+        // PHASE 2:
+        // Render HTML from markdown lines.
+        // Look at each line and emit fitting HTML code
+
+        function markdownInlines(innerText, stopChar) {
+
+            // inline types:
+            // **{INLINE}**       : <strong>
+            // __{INLINE}__       : <u>
+            // ~~{INLINE}~~       : <s>
+            //  *{INLINE}*        : <emph>
+            //  _{INLINE}_        : <emph>
+            //  `{TEXT}`          : <code>
+            //  [{INLINE}]({URL}) : <a>
+            // ![{TEXT}]({URL})   : <img>
+            // [[std;format.fmt]] : <a> (inner link)
+
+            const formats = [
+                {
+                    marker: "**",
+                    tag: "strong",
+                },
+                {
+                    marker: "~~",
+                    tag: "s",
+                },
+                {
+                    marker: "__",
+                    tag: "u",
+                },
+                {
+                    marker: "*",
+                    tag: "em",
+                }
+            ];
+
+            const stack = [];
+
+            var innerHTML = "";
+            var currentRun = "";
+
+            function flushRun() {
+                if (currentRun != "") {
+                    innerHTML += escapeHtml(currentRun);
+                }
+                currentRun = "";
+            }
+
+            var parsing_code = false;
+            var codetag = "";
+            var in_code = false;
+
+            for (var i = 0; i < innerText.length; i++) {
+
+                if (parsing_code && in_code) {
+                    if (innerText.substr(i, codetag.length) == codetag) {
+                        // remove leading and trailing whitespace if string both starts and ends with one.
+                        if (currentRun[0] == " " && currentRun[currentRun.length - 1] == " ") {
+                            currentRun = currentRun.substr(1, currentRun.length - 2);
+                        }
+                        flushRun();
+                        i += codetag.length - 1;
+                        in_code = false;
+                        parsing_code = false;
+                        innerHTML += "</code>";
+                        codetag = "";
+                    } else {
+                        currentRun += innerText[i];
+                    }
+                    continue;
+                }
+
+                if (innerText[i] == "`") {
+                    flushRun();
+                    if (!parsing_code) {
+                        innerHTML += "<code>";
+                    }
+                    parsing_code = true;
+                    codetag += "`";
+                    continue;
+                }
+
+                if (parsing_code) {
+                    currentRun += innerText[i];
+                    in_code = true;
+                } else {
+                    var any = false;
+                    for (var idx = (stack.length > 0 ? -1 : 0); idx < formats.length; idx++) {
+                        const fmt = idx >= 0 ? formats[idx] : stack[stack.length - 1];
+                        if (innerText.substr(i, fmt.marker.length) == fmt.marker) {
+                            flushRun();
+                            if (stack[stack.length - 1] == fmt) {
+                                stack.pop();
+                                innerHTML += "</" + fmt.tag + ">";
+                            } else {
+                                stack.push(fmt);
+                                innerHTML += "<" + fmt.tag + ">";
+                            }
+                            i += fmt.marker.length - 1;
+                            any = true;
+                            break;
+                        }
+                    }
+                    if (!any) {
+                        currentRun += innerText[i];
+                    }
+                }
+            }
+            flushRun();
+
+            while (stack.length > 0) {
+                const fmt = stack.pop();
+                innerHTML += "</" + fmt.tag + ">";
+            }
+
+            return innerHTML;
+        }
+
+        var html = "";
+        for (var line_no = 0; line_no < lines.length; line_no++) {
+            const line = lines[line_no];
+
+            function previousLineIs(type) {
+                if (line_no > 0) {
+                    return (lines[line_no - 1].type == type);
+                } else {
+                    return false;
+                }
+            }
+
+            function nextLineIs(type) {
+                if (line_no < (lines.length - 1)) {
+                    return (lines[line_no + 1].type == type);
+                } else {
+                    return false;
+                }
+            }
+
+            function getPreviousLineIndent() {
+                if (line_no > 0) {
+                    return lines[line_no - 1].indent;
+                } else {
+                    return 0;
+                }
+            }
+
+            function getNextLineIndent() {
+                if (line_no < (lines.length - 1)) {
+                    return lines[line_no + 1].indent;
+                } else {
+                    return 0;
+                }
+            }
+
+            switch (line.type) {
+                case "h1":
+                case "h2":
+                case "h3":
+                case "h4":
+                case "h5":
+                case "h6":
+                    html += "<" + line.type + ">" + markdownInlines(line.text) + "</" + line.type + ">\n";
+                    break;
+
+                case "ul":
+                case "ol":
+                    if (!previousLineIs("ul") || getPreviousLineIndent() < line.indent) {
+                        html += "<" + line.type + ">\n";
+                    }
+
+                    html += "<li>" + markdownInlines(line.text) + "</li>\n";
+
+                    if (!nextLineIs("ul") || getNextLineIndent() < line.indent) {
+                        html += "</" + line.type + ">\n";
+                    }
+                    break;
+
+                case "p":
+                    if (!previousLineIs("p")) {
+                        html += "<p>\n";
+                    }
+                    html += markdownInlines(line.text) + "\n";
+                    if (!nextLineIs("p")) {
+                        html += "</p>\n";
+                    }
+                    break;
+
+                case "code":
+                    if (!previousLineIs("code")) {
+                        html += "<pre><code>";
+                    }
+                    html += escapeHtml(line.text) + "\n";
+                    if (!nextLineIs("code")) {
+                        html += "</code></pre>\n";
+                    }
+                    break;
+            }
+        }
+
+        return html;
     }
 
     function activateSelectedResult() {

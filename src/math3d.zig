@@ -113,7 +113,7 @@ fn VectorMixin(comptime Self: type) type {
                 const fieldorder = "xyzw";
                 inline for (components) |c, i| {
                     const slice = components[i .. i + 1];
-                    const temp = if (std.mem.eql(u8, slice, "0")) 0 else if (std.mem.eql(u8, slice, "1")) 1 else @field(self);
+                    const temp = if (std.mem.eql(u8, slice, "0")) @as(f32, 0) else comptime if (std.mem.eql(u8, slice, "1")) @as(f32, 1) else @field(self, slice);
                     @field(result, switch (i) {
                         0 => "x",
                         1 => "y",
@@ -155,8 +155,8 @@ fn VectorMixin(comptime Self: type) type {
 pub const Vec2 = extern struct {
     const Self = @This();
 
-    pub x: f32,
-    pub y: f32,
+    x: f32,
+    y: f32,
 
     pub const zero = Self.new(0, 0);
     pub const unitX = Self.new(1, 0);
@@ -171,7 +171,7 @@ pub const Vec2 = extern struct {
         };
     }
 
-    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@typeOf(context), []const u8) Errors!void) Errors!void {
+    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
         try std.fmt.format(context, Errors, output, "vec2({d:.2}, {d:.2})", value.x, value.y);
     }
 
@@ -198,9 +198,9 @@ pub const Vec2 = extern struct {
 pub const Vec3 = extern struct {
     const Self = @This();
 
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
+    x: f32,
+    y: f32,
+    z: f32,
 
     pub const zero = Self.new(0, 0, 0);
     pub const unitX = Self.new(1, 0, 0);
@@ -217,7 +217,7 @@ pub const Vec3 = extern struct {
         };
     }
 
-    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@typeOf(context), []const u8) Errors!void) Errors!void {
+    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
         try std.fmt.format(context, Errors, output, "vec3({d:.2}, {d:.2}, {d:.2})", value.x, value.y, value.z);
     }
 
@@ -301,10 +301,10 @@ pub const Vec3 = extern struct {
 pub const Vec4 = extern struct {
     const Self = @This();
 
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-    pub w: f32,
+    x: f32,
+    y: f32,
+    z: f32,
+    w: f32,
 
     pub const zero = Self.new(0, 0, 0, 0);
     pub const unitX = Self.new(1, 0, 0, 0);
@@ -323,7 +323,7 @@ pub const Vec4 = extern struct {
         };
     }
 
-    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@typeOf(context), []const u8) Errors!void) Errors!void {
+    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
         try std.fmt.format(context, Errors, output, "vec4({d:.2}, {d:.2}, {d:.2}, {d:.2})", value.x, value.y, value.z, value.w);
     }
 
@@ -402,7 +402,7 @@ pub const Mat4 = extern struct {
         },
     };
 
-    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@typeOf(context), []const u8) Errors!void) Errors!void {
+    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
         try output(context, "mat4{");
 
         inline for ([_]comptime_int{ 0, 1, 2, 3 }) |i| {
@@ -667,16 +667,15 @@ test "vec3 <-> vec4 interop" {
 
 // TODO: write tests for mat2, mat3
 
-// zig fmt: off
 test "mat4 arithmetics" {
     const id = Mat4.identity;
 
     const mat = Mat4{
         .fields = [4][4]f32{
             // zig fmt: off
-            [4]f32{  1,  2,  3,  4 },
-            [4]f32{  5,  6,  7,  8 },
-            [4]f32{  9, 10, 11, 12 },
+            [4]f32{ 1, 2, 3, 4 },
+            [4]f32{ 5, 6, 7, 8 },
+            [4]f32{ 9, 10, 11, 12 },
             [4]f32{ 13, 14, 15, 16 },
             // zig-fmt: on
         },
@@ -749,7 +748,6 @@ test "mat4 arithmetics" {
 
     assert(std.meta.eql(Mat4.transpose(mat), mat_transposed));
 }
-// zig fmt: on
 
 test "vec4 transform" {
     const id = Mat4.identity;

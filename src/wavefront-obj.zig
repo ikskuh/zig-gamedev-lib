@@ -10,31 +10,31 @@ comptime {
 // with a lot of restrictions
 
 pub const Vertex = struct {
-    pub position: usize,
-    pub normal: ?usize,
-    pub textureCoordinate: ?usize,
+    position: usize,
+    normal: ?usize,
+    textureCoordinate: ?usize,
 };
 
 pub const Face = struct {
-    pub vertices: [4]Vertex, // support up to 4 vertices per face (so tris and quads)
-    pub count: usize = 0,
+    vertices: [4]Vertex, // support up to 4 vertices per face (so tris and quads)
+    count: usize = 0,
 };
 
 pub const Object = struct {
-    pub name: []const u8,
-    pub material: ?[]const u8,
-    pub start: usize,
-    pub count: usize,
+    name: []const u8,
+    material: ?[]const u8,
+    start: usize,
+    count: usize,
 };
 
 pub const Model = struct {
     const Self = @This();
 
-    pub positions: std.ArrayList(Vec4),
-    pub normals: std.ArrayList(Vec3),
-    pub textureCoordinates: std.ArrayList(Vec3),
-    pub faces: std.ArrayList(Face),
-    pub objects: std.ArrayList(Object),
+    positions: std.ArrayList(Vec4),
+    normals: std.ArrayList(Vec3),
+    textureCoordinates: std.ArrayList(Vec3),
+    faces: std.ArrayList(Face),
+    objects: std.ArrayList(Object),
 
     allocator: *std.mem.Allocator,
 
@@ -184,11 +184,11 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
         else if (std.mem.startsWith(u8, line, "o ")) {
             if (currentObject) |obj| {
                 // terminate object
-                obj.count = model.faces.count() - obj.start;
+                obj.count = model.faces.len - obj.start;
             }
             var obj = try model.objects.addOne();
 
-            obj.start = model.faces.count();
+            obj.start = model.faces.len;
             obj.count = 0;
             obj.name = std.mem.dupe(allocator, u8, line[2..]) catch |err| {
                 _ = model.objects.pop(); // remove last element, then error
@@ -216,14 +216,18 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
         // parse smoothing groups
         else if (std.mem.startsWith(u8, line, "s ")) {
             // and just ignore them :(
+        }
+        // parse groups
+        else if (std.mem.startsWith(u8, line, "g ")) {
+            // and just ignore them :(
         } else {
-            std.debug.warn("read line: {}\n", line);
+            std.debug.warn("read line: {}\n", .{line});
         }
     }
 
     // terminate object if any
     if (currentObject) |obj| {
-        obj.count = model.faces.count() - obj.start;
+        obj.count = model.faces.len - obj.start;
     }
 
     return model;

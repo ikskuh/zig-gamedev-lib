@@ -23,9 +23,9 @@ pub const Format = enum {
 
 /// RGB pixel value.
 pub const Color = extern struct {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
+    r: u8,
+    g: u8,
+    b: u8,
 };
 
 /// Generic image datatype that contains pixels of type `T`.
@@ -37,10 +37,10 @@ pub fn AnymapData(comptime T: type) type {
         pixels: []T,
 
         /// width of the image in pixels.
-        pub width: usize,
+        width: usize,
 
         /// height of the image in pixels.
-        pub height: usize,
+        height: usize,
 
         /// releases the memory held by this instance.
         pub fn deinit(self: Self) void {
@@ -166,24 +166,24 @@ fn parseHeader(allocator: *std.mem.Allocator, stream: *std.io.InStream(std.fs.Fi
     var magic: [2]u8 = undefined;
     try stream.readNoEof(magic[0..]);
 
-    if (std.mem.eql(u8, magic, "P1")) {
+    if (std.mem.eql(u8, &magic, "P1")) {
         hdr.binary = false;
         hdr.format = .bitmap;
         hdr.maxValue = 1;
-    } else if (std.mem.eql(u8, magic, "P2")) {
+    } else if (std.mem.eql(u8, &magic, "P2")) {
         hdr.binary = false;
         hdr.format = .grayscale;
-    } else if (std.mem.eql(u8, magic, "P3")) {
+    } else if (std.mem.eql(u8, &magic, "P3")) {
         hdr.binary = false;
         hdr.format = .rgb;
-    } else if (std.mem.eql(u8, magic, "P4")) {
+    } else if (std.mem.eql(u8, &magic, "P4")) {
         hdr.binary = true;
         hdr.format = .bitmap;
         hdr.maxValue = 1;
-    } else if (std.mem.eql(u8, magic, "P5")) {
+    } else if (std.mem.eql(u8, &magic, "P5")) {
         hdr.binary = true;
         hdr.format = .grayscale;
-    } else if (std.mem.eql(u8, magic, "P6")) {
+    } else if (std.mem.eql(u8, &magic, "P6")) {
         hdr.binary = true;
         hdr.format = .rgb;
     } else {
@@ -212,7 +212,7 @@ fn loadBinaryBitmap(data: *AnymapData(u1), stream: *std.io.InStream(std.fs.File.
             while (x < data.width and i < 8) {
                 // set bit is black, cleared bit is white
                 // bits are "left to right" (so msb to lsb)
-                try data.set(x, y, if ((b & (u8(1) << @truncate(u3, 7 - i))) != 0) u1(0) else u1(1));
+                try data.set(x, y, if ((b & (@as(u8, 1) << @truncate(u3, 7 - i))) != 0) @as(u1, 0) else @as(u1, 1));
 
                 x += 1;
                 i += 1;
@@ -232,7 +232,7 @@ fn loadAsciiBitmap(data: *AnymapData(u1), stream: *std.io.InStream(std.fs.File.R
             }
             // 1 is black, 0 is white in PBM spec.
             // we use 1=white, 0=black in u1 format
-            try data.set(x, y, if (b == '0') u1(1) else u1(0));
+            try data.set(x, y, if (b == '0') @as(u1, 1) else @as(u1, 0));
             x += 1;
         }
     }
@@ -240,9 +240,9 @@ fn loadAsciiBitmap(data: *AnymapData(u1), stream: *std.io.InStream(std.fs.File.R
 
 fn readLinearizedValue(stream: *std.io.InStream(std.fs.File.ReadError), maxValue: usize) !u8 {
     return if (maxValue > 255)
-        @truncate(u8, 255 * usize(try stream.readIntBig(u16)) / maxValue)
+        @truncate(u8, 255 * @as(usize, try stream.readIntBig(u16)) / maxValue)
     else
-        @truncate(u8, 255 * usize(try stream.readByte()) / maxValue);
+        @truncate(u8, 255 * @as(usize, try stream.readByte()) / maxValue);
 }
 
 fn loadBinaryGraymap(data: *AnymapData(u8), stream: *std.io.InStream(std.fs.File.ReadError), maxValue: usize) !void {
@@ -316,7 +316,7 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Anymap {
 
     var header = try parseHeader(allocator, &stream.stream);
 
-    std.debug.warn("parsed: {}\n", header);
+    // std.debug.warn("parsed: {}\n", .{header});
 
     switch (header.format) {
         .bitmap => {
