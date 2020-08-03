@@ -44,7 +44,7 @@ pub const Model = struct {
         self.textureCoordinates.deinit();
         self.faces.deinit();
 
-        for (self.objects.toSlice()) |obj| {
+        for (self.objects.items) |obj| {
             self.allocator.free(obj.name);
             if (obj.material) |mtl| {
                 self.allocator.free(mtl);
@@ -61,7 +61,7 @@ fn parseVertexSpec(spec: []const u8) !Vertex {
         .textureCoordinate = null,
     };
 
-    var iter = std.mem.separate(spec, "/");
+    var iter = std.mem.split(spec, "/");
     var state: u32 = 0;
     while (iter.next()) |part| {
         switch (state) {
@@ -77,10 +77,10 @@ fn parseVertexSpec(spec: []const u8) !Vertex {
 }
 
 pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
-    var file = try std.fs.File.openRead(path);
+    var file = try std.fs.cwd().openFile(path, .{ .read = true, .write = false });
     defer file.close();
 
-    var stream = file.inStream();
+    var stream = file.reader();
 
     var model = Model{
         .positions = std.ArrayList(Vec4).init(allocator),
@@ -98,7 +98,7 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
     var currentObject: ?*Object = null;
 
     while (true) {
-        var line = stream.stream.readUntilDelimiterAlloc(allocator, '\n', 1024) catch |err| switch (err) {
+        var line = stream.readUntilDelimiterAlloc(allocator, '\n', 1024) catch |err| switch (err) {
             error.EndOfStream => break,
             else => return err,
         };
@@ -110,7 +110,7 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
         }
         // parse vertex
         else if (std.mem.startsWith(u8, line, "v ")) {
-            var iter = std.mem.separate(line[2..], " ");
+            var iter = std.mem.split(line[2..], " ");
             var state: u32 = 0;
             var vertex = vec4(0, 0, 0, 1);
             while (iter.next()) |part| {
@@ -129,7 +129,7 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
         }
         // parse uv coords
         else if (std.mem.startsWith(u8, line, "vt ")) {
-            var iter = std.mem.separate(line[3..], " ");
+            var iter = std.mem.split(line[3..], " ");
             var state: u32 = 0;
             var texcoord = vec3(0, 0, 0);
             while (iter.next()) |part| {
@@ -147,7 +147,7 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
         }
         // parse normals
         else if (std.mem.startsWith(u8, line, "vn ")) {
-            var iter = std.mem.separate(line[3..], " ");
+            var iter = std.mem.split(line[3..], " ");
             var state: u32 = 0;
             var normal = vec3(0, 0, 0);
             while (iter.next()) |part| {
@@ -165,7 +165,7 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
         }
         // parse faces
         else if (std.mem.startsWith(u8, line, "f ")) {
-            var iter = std.mem.separate(line[2..], " ");
+            var iter = std.mem.split(line[2..], " ");
             var state: u32 = 0;
             var face: Face = undefined;
             while (iter.next()) |part| {
@@ -184,11 +184,11 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
         else if (std.mem.startsWith(u8, line, "o ")) {
             if (currentObject) |obj| {
                 // terminate object
-                obj.count = model.faces.len - obj.start;
+                obj.count = model.faces.items.len - obj.start;
             }
             var obj = try model.objects.addOne();
 
-            obj.start = model.faces.len;
+            obj.start = model.faces.items.len;
             obj.count = 0;
             obj.name = std.mem.dupe(allocator, u8, line[2..]) catch |err| {
                 _ = model.objects.pop(); // remove last element, then error
@@ -227,7 +227,7 @@ pub fn load(allocator: *std.mem.Allocator, path: []const u8) !Model {
 
     // terminate object if any
     if (currentObject) |obj| {
-        obj.count = model.faces.len - obj.start;
+        obj.count = model.faces.items.len - obj.start;
     }
 
     return model;

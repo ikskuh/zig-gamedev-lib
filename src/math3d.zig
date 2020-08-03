@@ -171,7 +171,7 @@ pub const Vec2 = extern struct {
         };
     }
 
-    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
+    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: anytype, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
         try std.fmt.format(context, Errors, output, "vec2({d:.2}, {d:.2})", value.x, value.y);
     }
 
@@ -217,7 +217,7 @@ pub const Vec3 = extern struct {
         };
     }
 
-    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
+    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: anytype, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
         try std.fmt.format(context, Errors, output, "vec3({d:.2}, {d:.2}, {d:.2})", value.x, value.y, value.z);
     }
 
@@ -323,7 +323,7 @@ pub const Vec4 = extern struct {
         };
     }
 
-    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
+    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: anytype, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
         try std.fmt.format(context, Errors, output, "vec4({d:.2}, {d:.2}, {d:.2}, {d:.2})", value.x, value.y, value.z, value.w);
     }
 
@@ -402,7 +402,7 @@ pub const Mat4 = extern struct {
         },
     };
 
-    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: var, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
+    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, context: anytype, comptime Errors: type, output: fn (@TypeOf(context), []const u8) Errors!void) Errors!void {
         try output(context, "mat4{");
 
         inline for ([_]comptime_int{ 0, 1, 2, 3 }) |i| {
