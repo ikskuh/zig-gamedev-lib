@@ -1,5 +1,5 @@
 const std = @import("std");
-usingnamespace @import("math3d.zig");
+usingnamespace @import("zlm").specializeOn(f32);
 
 comptime {
     @import("std").meta.refAllDecls(@This());

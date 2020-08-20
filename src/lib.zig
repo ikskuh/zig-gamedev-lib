@@ -1,6 +1,3 @@
-/// provides linear algebra with focus on game dev.
-pub const math3d = @import("math3d.zig");
-
 /// provides a NetBMP loader
 pub const netbpm = @import("netbpm.zig");
 

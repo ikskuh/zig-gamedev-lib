@@ -1,6 +1,6 @@
 const std = @import("std");
 
-usingnamespace @import("math3d.zig");
+usingnamespace @import("zlm");
 
 // this file implements 2D signed distance functions (SDFs)
 // more info:
