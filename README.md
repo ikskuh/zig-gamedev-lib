@@ -1,5 +1,9 @@
 # xq's Zig Game Development Library
 
+> **NOTE:**
+> THIS PROJECT IS NOW ARCHIVED AS THE CODE IN IT SPLIT INTO SEVERAL OTHER PROJECTS.
+> 
+
 ## Modules
 
 - **math3d**: contains basic vector math for game development
